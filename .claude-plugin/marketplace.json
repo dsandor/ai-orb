@@ -1,0 +1,14 @@
+{
+  "name": "desk-orb",
+  "owner": {
+    "name": "David Sandor"
+  },
+  "plugins": [
+    {
+      "name": "deskorb",
+      "source": "./mod",
+      "description": "Push live Claude Code session status to an ESP32 round display"
+    }
+  ],
+  "description": "AI Orb: a round ESP32 desk display for Claude Code session status"
+}

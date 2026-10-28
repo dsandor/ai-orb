@@ -1,0 +1,6 @@
+_ref/
+firmware/.pio/
+firmware/preview/out/
+mod/.claude-plugin/types/
+mod/tsconfig.json
+.DS_Store
