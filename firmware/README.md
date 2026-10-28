@@ -110,13 +110,13 @@ Open `http://claude-orb.local/` (or the IP). It shows:
 - Maintenance: **Forget Wi-Fi** (reboots into setup mode) and **Factory
   reset** (erases all settings).
 
-When a token is configured, saving changes requires typing the current token.
+When a token is configured, saving changes requires typing the current token. The token is never shown on any page. The `/setup` form works only while the orb is in setup mode. Forms posted from another site are refused.
 
 ## API (summary, see `docs/protocol.md`)
 
 | Method | Path | Notes |
 |--------|------|-------|
-| POST | `/api/state` | full session snapshot. Returns `{"ok":true,"sessions":N}`, `400` on bad JSON or missing `sid`, `413` above 8 KB |
+| POST | `/api/state` | full session snapshot. Returns `{"ok":true,"sessions":N}`, `400` on bad JSON or missing `sid`, `413` above 8 KB, `415` without `Content-Type: application/json` |
 | POST | `/api/end`   | `{"v":1,"sid":"..."}`. Unknown sids are fine (200) |
 | GET  | `/api/info`  | `{"name","fw","ip","sessions","uptimeMs","board","proto"}` |
 

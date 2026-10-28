@@ -46,6 +46,23 @@ static void sendErr(int code, const char* msg) {
   sendJson(code, b);
 }
 
+// A browser marks a cross-site POST with an Origin naming the other site. Reject it, so a page
+// elsewhere cannot drive the settings forms. Tools (curl, the mod) send no Origin.
+static bool sameOrigin() {
+  String origin = server.header("Origin");
+  if (!origin.length()) return true;
+  if (origin == "null") return false;   // sandboxed frames and file: pages
+  int at = origin.indexOf("://");
+  String host = at >= 0 ? origin.substring(at + 3) : origin;
+  return host.equalsIgnoreCase(server.header("Host"));
+}
+
+// application/json cannot be sent cross-site without a CORS preflight, which this server never
+// grants, so a web page cannot forge a status push as a plain form post.
+static bool isJson() {
+  return server.header("Content-Type").startsWith("application/json");
+}
+
 static bool apiAuthorized() {
   if (!settings.token[0]) return true;
   String t = server.header("X-Orb-Token");
@@ -86,6 +103,7 @@ static bool readBody(String& body) {
 
 static void handleState() {
   if (!apiAuthorized()) { sendErr(401, "unauthorized"); return; }
+  if (!isJson() || !sameOrigin()) { sendErr(415, "expected application/json"); return; }
   String body;
   if (!readBody(body)) return;
   const char* err = "";
@@ -98,6 +116,7 @@ static void handleState() {
 
 static void handleEnd() {
   if (!apiAuthorized()) { sendErr(401, "unauthorized"); return; }
+  if (!isJson() || !sameOrigin()) { sendErr(415, "expected application/json"); return; }
   String body;
   if (!readBody(body)) return;
   const char* err = "";
@@ -219,6 +238,8 @@ static const char* resolveTz() {
   return buf;
 }
 
+static bool formAuthorized();
+
 static void handleSetupPage() {
   String h;
   h.reserve(9000);
@@ -232,9 +253,11 @@ static void handleSetupPage() {
          "</div><h2>Device</h2><div class=card><label>Name (mDNS host)</label><input name=name maxlength=31 value='");
   h += esc(settings.name);
   h += F("'><label>API token (optional, sent as X-Orb-Token)</label>"
-         "<input name=token maxlength=64 autocomplete=off value='");
-  h += esc(settings.token);
-  h += F("'><label>Time zone</label><select name=tz id=tzsel data-auto=1>");
+         "<input name=token type=password maxlength=64 autocomplete=off placeholder='");
+  h += settings.token[0] ? F("set: leave empty to keep it") : F("none");
+  h += F("'>");
+  if (settings.token[0]) h += F("<label>Current token (required to change it)</label><input name=cur type=password autocomplete=off>");
+  h += F("<label>Time zone</label><select name=tz id=tzsel data-auto=1>");
   tzOptions(h, true);
   h += F("</select><div style='display:none'><label>POSIX TZ string</label><input name=tzc id=tzc value='");
   h += esc(settings.tz);
@@ -249,6 +272,10 @@ static void handleSetupPage() {
 }
 
 static void handleSetupSave() {
+  // Outside setup mode the Wi-Fi is changed from the settings page, which asks for the token.
+  if (netState() != NetState::Setup || !sameOrigin()) { server.send(403, "text/plain", "Forbidden"); return; }
+  String tok = server.arg("token"); tok.trim();
+  if (tok.length() && !formAuthorized()) { server.send(403, "text/plain", "Current token required to change it"); return; }
   String ssid = server.arg("ssid");
   ssid.trim();
   if (!ssid.length() || ssid.length() > 32) { server.send(400, "text/plain", "SSID required"); return; }
@@ -256,8 +283,7 @@ static void handleSetupSave() {
   strlcpy(settings.pass, server.arg("pass").c_str(), sizeof(settings.pass));
   String name = server.arg("name"); name.trim();
   if (name.length()) strlcpy(settings.name, name.c_str(), sizeof(settings.name));
-  String tok = server.arg("token"); tok.trim();
-  strlcpy(settings.token, tok.c_str(), sizeof(settings.token));
+  if (tok.length()) strlcpy(settings.token, tok.c_str(), sizeof(settings.token));
   strlcpy(settings.tz, resolveTz(), sizeof(settings.tz));
   settingsSave();
   String h;
@@ -371,6 +397,7 @@ static void handleSettingsPage() {
 }
 
 static bool formAuthorized() {
+  if (!sameOrigin()) return false;
   if (!settings.token[0]) return true;
   return constEq(server.arg("cur").c_str(), settings.token);
 }
@@ -443,8 +470,8 @@ static void handleNotFound() {
 }
 
 void webBegin() {
-  static const char* hdrs[] = {"X-Orb-Token"};
-  server.collectHeaders(hdrs, 1);
+  static const char* hdrs[] = {"X-Orb-Token", "Origin", "Host", "Content-Type"};
+  server.collectHeaders(hdrs, 4);
 
   server.on("/api/state", HTTP_POST, handleState);
   server.on("/api/end",   HTTP_POST, handleEnd);
