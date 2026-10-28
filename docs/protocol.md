@@ -3,7 +3,8 @@
 The Claude Code mod (`mod/`) **pushes** to the device; the device never calls the host.
 Transport: plain HTTP/1.1 on the LAN, JSON bodies, UTF-8. Device hostname: `claude-orb.local` (mDNS), port 80.
 POSTs must carry `Content-Type: application/json` (otherwise 415), and a request with a browser `Origin` header
-naming another host is refused, so a web page cannot forge pushes or settings changes.
+naming another host is refused, so a web page cannot forge pushes or settings changes. Requests whose `Host` is not
+the device's own name (`<name>.local`) or IP get 403, which blocks DNS-rebinding attacks.
 Optional shared secret: if the device has a token configured, every request must carry `X-Orb-Token: <token>`; otherwise 401.
 
 All times are **relative durations in ms measured on the host at send time** (no clock sync needed). The device

@@ -46,15 +46,42 @@ static void sendErr(int code, const char* msg) {
   sendJson(code, b);
 }
 
+// Whether `host` (a Host header, or an Origin's host, with or without :port) is one of the orb's
+// own names: <name>.local or its IP (the AP's IP in setup mode). Comparing Origin with Host alone
+// is not enough: under DNS rebinding an attacker's name resolves to the orb, and both carry it.
+static bool isOwnHost(String host) {
+  int colon = host.indexOf(':');
+  if (colon >= 0) host = host.substring(0, colon);
+  if (host.endsWith(".")) host.remove(host.length() - 1);
+  String mdns = String(netHostname()) + ".local";
+  return host.equalsIgnoreCase(mdns) || host == netIp();
+}
+
+// A request addressed to another name is a captive-portal probe (setup mode) or a rebinding
+// attack; tools that send no Host at all are let through, as browsers always send one.
+static bool hostOk() {
+  String host = server.header("Host");
+  return !host.length() || isOwnHost(host);
+}
+
+// Gate for every handler: answers the request itself and returns false when it is refused.
+static void captiveRedirect();
+static bool admit() {
+  if (hostOk()) return true;
+  if (netState() == NetState::Setup && server.method() == HTTP_GET) captiveRedirect();
+  else server.send(403, "text/plain", "Forbidden");
+  return false;
+}
+
 // A browser marks a cross-site POST with an Origin naming the other site. Reject it, so a page
 // elsewhere cannot drive the settings forms. Tools (curl, the mod) send no Origin.
 static bool sameOrigin() {
+  if (!hostOk()) return false;
   String origin = server.header("Origin");
   if (!origin.length()) return true;
   if (origin == "null") return false;   // sandboxed frames and file: pages
   int at = origin.indexOf("://");
-  String host = at >= 0 ? origin.substring(at + 3) : origin;
-  return host.equalsIgnoreCase(server.header("Host"));
+  return isOwnHost(at >= 0 ? origin.substring(at + 3) : origin);
 }
 
 // application/json cannot be sent cross-site without a CORS preflight, which this server never
@@ -102,6 +129,7 @@ static bool readBody(String& body) {
 }
 
 static void handleState() {
+  if (!admit()) return;
   if (!apiAuthorized()) { sendErr(401, "unauthorized"); return; }
   if (!isJson() || !sameOrigin()) { sendErr(415, "expected application/json"); return; }
   String body;
@@ -115,6 +143,7 @@ static void handleState() {
 }
 
 static void handleEnd() {
+  if (!admit()) return;
   if (!apiAuthorized()) { sendErr(401, "unauthorized"); return; }
   if (!isJson() || !sameOrigin()) { sendErr(415, "expected application/json"); return; }
   String body;
@@ -128,6 +157,7 @@ static void handleEnd() {
 }
 
 static void handleInfo() {
+  if (!admit()) return;
   if (!apiAuthorized()) { sendErr(401, "unauthorized"); return; }
   String b = "{\"name\":\"";
   b += esc(netHostname());   // hostname is [a-z0-9-] so JSON-safe
@@ -272,6 +302,7 @@ static void handleSetupPage() {
 }
 
 static void handleSetupSave() {
+  if (!admit()) return;
   // Outside setup mode the Wi-Fi is changed from the settings page, which asks for the token.
   if (netState() != NetState::Setup || !sameOrigin()) { server.send(403, "text/plain", "Forbidden"); return; }
   String tok = server.arg("token"); tok.trim();
@@ -403,6 +434,7 @@ static bool formAuthorized() {
 }
 
 static void handleSettingsSave() {
+  if (!admit()) return;
   if (!formAuthorized()) { redirect("/?denied=1"); return; }
   String name = server.arg("name"); name.trim();
   bool nameChanged = false;
@@ -431,6 +463,7 @@ static void handleSettingsSave() {
 }
 
 static void handleForgetWifi() {
+  if (!admit()) return;
   if (!formAuthorized()) { redirect("/?denied=1"); return; }
   settings.ssid[0] = settings.pass[0] = '\0';
   settingsSave();
@@ -442,6 +475,7 @@ static void handleForgetWifi() {
 }
 
 static void handleReset() {
+  if (!admit()) return;
   if (!formAuthorized()) { redirect("/?denied=1"); return; }
   settingsFactoryReset();
   server.send(200, "text/html",
@@ -452,6 +486,7 @@ static void handleReset() {
 }
 
 static void handleRoot() {
+  if (!admit()) return;
   if (netState() == NetState::Setup) handleSetupPage();
   else handleSettingsPage();
 }
@@ -482,6 +517,7 @@ void webBegin() {
   server.on("/forget-wifi", HTTP_POST, handleForgetWifi);
   server.on("/reset",     HTTP_POST, handleReset);
   server.on("/scan",      HTTP_GET,  []() {
+    if (!admit()) return;
     String j = netScanJson();
     if (netState() == NetState::Setup && WiFi.scanComplete() < 0 && WiFi.scanComplete() != WIFI_SCAN_RUNNING)
       netStartApScan();
