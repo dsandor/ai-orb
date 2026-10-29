@@ -12,6 +12,7 @@
 #include "web.h"
 #include "gfx.h"
 #include "ui.h"
+#include "demo.h"
 
 #if PIN_BUTTON >= 0
 namespace {
@@ -61,6 +62,9 @@ void setup() {
   ui::tick(millis());   // first frame before Wi-Fi spins up
   netBegin();
   webBegin();
+#if ORB_DEMO
+  demoBegin();
+#endif
 }
 
 void loop() {
@@ -70,6 +74,9 @@ void loop() {
   // that stamp makes every unsigned `now - stamp` wrap to ~49 days.
   const uint32_t now = millis();
   sessionsTick(now);
+#if ORB_DEMO
+  demoTick(now);
+#endif
 #if PIN_BUTTON >= 0
   pollButton(now);
 #endif

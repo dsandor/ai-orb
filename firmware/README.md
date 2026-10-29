@@ -149,6 +149,32 @@ python3 tools/simulate.py --scenario tools --dry-run          # print JSON lines
 To test staleness, stop the simulator with `kill -9` (no `/api/end`). After
 45 s the session dims with "no signal", and after 5 minutes it is dropped.
 
+## Demo mode (for videos)
+
+`esp32s3_round_demo` is the normal firmware plus a scripted 112-second loop that
+plays made-up sessions through every screen, with no Claude Code or simulator
+needed:
+
+```sh
+pio run -e esp32s3_round_demo -t upload
+```
+
+| Seconds | Screen |
+|---|---|
+| 0-4 | idle clock |
+| 4-27 | one session thinking, then Read / Grep / Edit / Bash tool calls |
+| 27-37 | Agents page: three subagents finishing one by one |
+| 37-45 | Limits page |
+| 45-53 | **NEEDS YOU** (`git push origin main`) |
+| 53-62 | the approved command runs, then **DONE** |
+| 62-92 | three sessions: `website` thinking, `infra` compacting then failing, `website` **NEEDS YOU** |
+| 94-104 | **DONE** for each of the three sessions |
+| 105-112 | sessions end, back to the clock |
+
+Wi-Fi still runs so the clock is right. Pushes from the mod are answered but
+ignored, so a Claude Code session nearby can't interrupt the loop. To go back,
+flash `esp32s3_round` again.
+
 ## Screens
 
 All screens are laid out for the circle; nothing important goes in the corners.
@@ -206,5 +232,6 @@ src/ui_agents.cpp     Agents screen
 src/ui_limits.cpp     Limits / receipt screen
 src/ui_attention.cpp  Attention + Done screens
 src/ui_idle.cpp       Idle clock, setup/connecting/connected, info overlay
+src/demo.cpp          scripted mock sessions for the demo build
 preview/              desktop renderer for screenshots
 ```

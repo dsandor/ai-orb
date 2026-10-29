@@ -56,6 +56,8 @@ python3 tools/simulate.py --host claude-orb.local --scenario cycle
 ```
 This walks through every screen with fake sessions; press Ctrl-C to stop. Other scenarios are `thinking`, `tools`, `agents`, `waiting` and `multi`, and `--sessions N` fakes several sessions at once. Add `--token <token>` if you set a token.
 
+For a video, flash the demo build instead. It loops through every screen by itself, with no computer attached: `pio run -e esp32s3_round_demo -t upload` (details in [`firmware/README.md`](firmware/README.md#demo-mode-for-videos)). Flash `esp32s3_round` again to go back.
+
 ## 5. Install the mod in Claude Code
 On every computer whose sessions you want on the display, run inside Claude Code:
 ```

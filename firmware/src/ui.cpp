@@ -253,6 +253,21 @@ void onShortPress() {
   manualUntil = now + ORB_MANUAL_HOLD_MS;
 }
 
+void pinPage(int8_t slot, Page page, uint32_t holdMs) {
+  Session* s = sessionAt(slot);
+  if (!s) return;
+  const View want = page == Page::Agents ? View::Agents : page == Page::Limits ? View::Limits : View::Session;
+  View pages[3];
+  uint8_t n = buildPages(*s, pages);
+  for (uint8_t i = 0; i < n; i++) {
+    if (pages[i] != want) continue;
+    manualSlot = slot;
+    manualPage = i;
+    manualUntil = millis() + holdMs;
+    return;
+  }
+}
+
 void onLongPress() {
   infoUntil = infoUntil ? 0 : millis() + 10000;
 }

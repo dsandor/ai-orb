@@ -12,6 +12,7 @@
 #include "config.h"
 #include "settings.h"
 #include "sessions.h"
+#include "demo.h"
 #include "net.h"
 #include "gfx.h"
 #include <WebServer.h>
@@ -134,6 +135,10 @@ static void handleState() {
   if (!isJson() || !sameOrigin()) { sendErr(415, "expected application/json"); return; }
   String body;
   if (!readBody(body)) return;
+#if ORB_DEMO
+  sendJson(200, "{\"ok\":true,\"demo\":true}");   // the demo owns the session table
+  return;
+#endif
   const char* err = "";
   int code = sessionsApplyState(body.c_str(), body.length(), err);
   if (code != 200) { sendErr(code, err); return; }
@@ -148,6 +153,10 @@ static void handleEnd() {
   if (!isJson() || !sameOrigin()) { sendErr(415, "expected application/json"); return; }
   String body;
   if (!readBody(body)) return;
+#if ORB_DEMO
+  sendJson(200, "{\"ok\":true,\"demo\":true}");
+  return;
+#endif
   const char* err = "";
   int code = sessionsApplyEnd(body.c_str(), body.length(), err);
   if (code != 200) { sendErr(code, err); return; }
