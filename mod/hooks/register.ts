@@ -130,9 +130,9 @@ async function askForDevice($: EngineInterface, devices: readonly OrbDevice[]) {
   const offered = devices.slice(0, 4)
   const labels = offered.map(d => `${deviceLabel(d)}${deviceUrl(d) === link.url ? ' - current' : ''}`)
   const more = devices.length > offered.length ? ` (${devices.length - offered.length} more: type a name or IP under Other)` : ''
-  const answer = await $.ui.ask(`${devices.length} Desk Orbs are on your network. Which one should this computer's sessions show on?${more}`, {
+  const answer = await $.ui.ask(`${devices.length} AI Orbs are on your network. Which one should this computer's sessions show on?${more}`, {
     options: labels,
-    header: 'Desk Orb',
+    header: 'AI Orb',
   })
   const i = labels.indexOf(answer)
   const d = i >= 0 ? offered[i] : undefined
@@ -160,9 +160,9 @@ async function autoDiscover($: EngineInterface, isInteractive: boolean) {
     const pick = await askForDevice($, devices)
     if (!pick) return
     await choose($, pick)
-    $.ui.log(`Desk Orb: this computer now reports to ${pick.label}. /orb choose changes it.`)
+    $.ui.log(`AI Orb: this computer now reports to ${pick.label}. /orb choose changes it.`)
   } catch {
-    $.ui.log('Desk Orb: several orbs are on your network; run /orb choose to pick one.')
+    $.ui.log('AI Orb: several orbs are on your network; run /orb choose to pick one.')
   }
 }
 
@@ -256,7 +256,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'orb',
-      description: 'Desk Orb display: show its connection, or send a test push',
+      description: 'AI Orb display: show its connection, or send a test push',
       argumentHint: '[status|test|scan|choose|use <name, IP or URL>|reset]',
     })
     await loadChoice($)
@@ -306,17 +306,17 @@ export const register: Register = (on, options) => {
     const args = e.args.trim()
     const verb = args.split(/\s+/)[0] || 'status'
     const rest = args.slice(verb.length).trim()
-    if (!link.isEnabled) return { text: 'Desk Orb is off: turn it on in /config.' }
+    if (!link.isEnabled) return { text: 'AI Orb is off: turn it on in /config.' }
     await loadChoice($)
 
     if (verb === 'scan' || verb === 'choose') {
       const { devices, error } = await discover($)
       if (devices.length === 0) {
-        return { text: `No Desk Orbs found${error ? ` (${error})` : ''}. Pushing to ${link.url || 'nothing'}; /orb use <IP> sets one by hand.` }
+        return { text: `No AI Orbs found${error ? ` (${error})` : ''}. Pushing to ${link.url || 'nothing'}; /orb use <IP> sets one by hand.` }
       }
       if (verb === 'scan') {
         const rows = devices.map(d => `${deviceUrl(d) === link.url ? '*' : ' '} ${deviceLabel(d)}  ${deviceUrl(d)}${d.fw ? `  fw ${d.fw}` : ''}`)
-        return { text: `Desk Orbs on your network (* = this computer's):\n${rows.join('\n')}\n/orb choose picks one.` }
+        return { text: `AI Orbs on your network (* = this computer's):\n${rows.join('\n')}\n/orb choose picks one.` }
       }
       let pick: { url: string; label: string } | null
       if (devices.length === 1) {
@@ -324,9 +324,9 @@ export const register: Register = (on, options) => {
         const d = devices[0]!
         const yes = `Use ${deviceUrl(d)}`
         try {
-          const answer = await $.ui.ask(`One Desk Orb found: ${deviceLabel(d)} at ${deviceUrl(d)}. Is this your orb? It will receive your device token.`, {
+          const answer = await $.ui.ask(`One AI Orb found: ${deviceLabel(d)} at ${deviceUrl(d)}. Is this your orb? It will receive your device token.`, {
             options: [yes, 'Cancel'],
-            header: 'Desk Orb',
+            header: 'AI Orb',
           })
           pick = answer === yes ? { url: deviceUrl(d), label: deviceLabel(d) } : null
         } catch {
@@ -342,14 +342,14 @@ export const register: Register = (on, options) => {
       }
       if (!pick) return { text: `That names no orb found. Kept ${link.url}.` }
       await choose($, pick)
-      return { text: `Desk Orb -> ${pick.url} (${pick.label}).` }
+      return { text: `AI Orb -> ${pick.url} (${pick.label}).` }
     }
 
     if (verb === 'use') {
       const pick = pickDevice(rest, [])
       if (!pick) return { text: 'Usage: /orb use <name.local, IP or URL>' }
       await choose($, pick)
-      return { text: `Desk Orb -> ${pick.url}` }
+      return { text: `AI Orb -> ${pick.url}` }
     }
 
     if (verb === 'reset') {
@@ -357,19 +357,19 @@ export const register: Register = (on, options) => {
       link.chosen = null
       await retarget($, link.foundUrl || link.configUrl)
       schedule($, 50)
-      return { text: `Forgot the chosen orb. Desk Orb -> ${link.url} (${sourceOf()}).` }
+      return { text: `Forgot the chosen orb. AI Orb -> ${link.url} (${sourceOf()}).` }
     }
 
-    if (!link.url) return { text: 'Desk Orb has no device: run /orb choose, or set a Device URL in /config.' }
+    if (!link.url) return { text: 'AI Orb has no device: run /orb choose, or set a Device URL in /config.' }
     if (verb === 'test') {
       link.lastSig = ''
       link.retryAt = 0
       await push($, true)
-      return { text: `Desk Orb -> ${link.url}: ${link.lastResult}` }
+      return { text: `AI Orb -> ${link.url}: ${link.lastResult}` }
     }
     const ago = link.lastSentAt ? `${Math.round(((await $.clock.now()) - link.lastSentAt) / 1000)}s ago` : 'never'
     return {
-      text: `Desk Orb -> ${link.url} (${sourceOf()})\nlast push: ${link.lastResult} (${ago})${link.failures ? `, ${link.failures} failures in a row` : ''}`,
+      text: `AI Orb -> ${link.url} (${sourceOf()})\nlast push: ${link.lastResult} (${ago})${link.failures ? `, ${link.failures} failures in a row` : ''}`,
     }
   })
 

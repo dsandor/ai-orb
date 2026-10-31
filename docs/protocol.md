@@ -1,4 +1,4 @@
-# Claude Orb wire protocol (v1)
+# AI Orb wire protocol (v1)
 
 The Claude Code mod (`mod/`) **pushes** to the device; the device never calls the host.
 Transport: plain HTTP/1.1 on the LAN, JSON bodies, UTF-8. Device hostname: `claude-orb.local` (mDNS), port 80.

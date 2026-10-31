@@ -1,7 +1,7 @@
 {
   "name": "deskorb",
   "version": "0.1.0",
-  "description": "Desk Orb: pushes live session status (state, context, cost, limits, permission asks, subagents) to an ESP32 round display on your desk",
+  "description": "AI Orb: pushes live session status (state, context, cost, limits, permission asks, subagents) to an ESP32 round display on your desk",
   "author": { "name": "David Sandor" },
   "license": "MIT",
   "keywords": ["claude-code-mod", "esp32", "dashboard", "hardware", "status"],
@@ -9,7 +9,7 @@
   "userConfig": {
     "deviceUrl": {
       "title": "Device URL",
-      "description": "Base URL of the Claude Orb display, e.g. http://claude-orb.local or http://192.168.1.50",
+      "description": "Base URL of the AI Orb display, e.g. http://claude-orb.local or http://192.168.1.50",
       "type": "string",
       "default": "http://claude-orb.local"
     },

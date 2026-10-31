@@ -1,6 +1,6 @@
 # deskorb for OpenCode
 
-Shows your OpenCode sessions on the Desk Orb, the same way the Claude Code mod does. It uses the same state logic and wire format (`../mod/hooks/core.ts`, `../docs/protocol.md`). It's written for OpenCode's **V1 plugin API** (opencode 1.x, `opencode --version`). OpenCode 2.x plugins use a different API, and this one won't load there.
+Shows your OpenCode sessions on the AI Orb, the same way the Claude Code mod does. It uses the same state logic and wire format (`../mod/hooks/core.ts`, `../docs/protocol.md`). It's written for OpenCode's **V1 plugin API** (opencode 1.x, `opencode --version`). OpenCode 2.x plugins use a different API, and this one won't load there.
 
 ## Install
 The plugin imports code from `../mod`, so install it as a **symlink** into the clone, not as a copy:

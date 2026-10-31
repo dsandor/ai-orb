@@ -1,6 +1,6 @@
 #pragma once
 // =============================================================================
-//  Claude Orb - compile-time configuration
+//  AI Orb - compile-time configuration
 //  Pins and panel options come from platformio.ini build flags; the defaults
 //  here only exist so a bare build still compiles (ESP32-S3 Super Mini map).
 // =============================================================================

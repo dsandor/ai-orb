@@ -1,5 +1,5 @@
 // =============================================================================
-//  Claude Orb - live Claude Code session status on a round GC9A01 display.
+//  AI Orb - live Claude Code session status on a round GC9A01 display.
 //  Single cooperative loop: HTTP + DNS + Wi-Fi state machine + UI frames.
 //  Everything runs on the Arduino loop task, so the session table needs no
 //  locking.

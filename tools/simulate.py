@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Orb simulator - pushes fake Claude Code sessions to the device.
+"""AI Orb simulator - pushes fake Claude Code sessions to the device.
 
 Implements the host side of docs/protocol.md (v1) so the display can be tested
 without Claude Code: full snapshots via POST /api/state on every change
@@ -418,7 +418,7 @@ def run_scenario(orb, scenario, count, duration, tick, limits, quiet):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Push fake Claude Code sessions to a Claude Orb (protocol v1).")
+    p = argparse.ArgumentParser(description="Push fake Claude Code sessions to a AI Orb (protocol v1).")
     p.add_argument("--host", default="claude-orb.local", help="device host or IP (default claude-orb.local)")
     p.add_argument("--port", type=int, default=80, help="HTTP port (default 80)")
     p.add_argument("--token", default="", help="X-Orb-Token, if one is set on the device")

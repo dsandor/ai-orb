@@ -22,5 +22,5 @@ void settingsSave();
 void settingsFactoryReset();      // wipes NVS namespace (wifi included)
 bool settingsHasWifi();
 
-// Turns an arbitrary name into a valid DNS label ("Claude Orb!" -> "claude-orb").
+// Turns an arbitrary name into a valid DNS label ("AI Orb!" -> "ai-orb").
 void sanitizeHostname(const char* in, char* out, size_t outLen);

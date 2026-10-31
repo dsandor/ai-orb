@@ -143,4 +143,4 @@ cd firmware/preview && ./build.zsh                            # render every scr
 ```
 
 ## License
-MIT. Parts of the mod are adapted from [Flightdeck](https://github.com/scasella/claude-flightdeck) (MIT). The Inter fonts are under the SIL Open Font License.
+MIT. Parts are adapted from [BambuHelper](https://github.com/Keralots/BambuHelper) (MIT) and [Flightdeck](https://github.com/scasella/claude-flightdeck) (MIT), and the Inter fonts are under the SIL Open Font License; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

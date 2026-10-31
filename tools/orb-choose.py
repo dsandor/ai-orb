@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Find Desk Orbs on the LAN and pick the one OpenCode reports to.
+"""Find AI Orbs on the LAN and pick the one OpenCode reports to.
 
 Writes ~/.config/deskorb/device.json, which the OpenCode plugin (opencode/deskorb.ts) re-reads every
 10 s. (Claude Code keeps its own pick: use /orb choose there.)
@@ -137,7 +137,7 @@ def main():
 
     ds = devices()
     if not ds:
-        raise SystemExit("No Desk Orbs found. Is it on this network and on firmware with _claude-orb mDNS? Try --url <IP>.")
+        raise SystemExit("No AI Orbs found. Is it on this network and on firmware with _claude-orb mDNS? Try --url <IP>.")
     cur = current()
     for i, d in enumerate(ds, 1):
         mark = "*" if url_of(d) == cur else " "

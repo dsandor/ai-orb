@@ -1,6 +1,6 @@
-# deskorb: Claude Code mod for the Desk Orb display
+# deskorb: Claude Code mod for the AI Orb display
 
-Pushes the live state of each Claude Code session to a Desk Orb display: an ESP32-S3 with a 1.28" round GC9A01 screen (firmware in `../firmware`). The mod is a Claude Code mod (function hooks, Claude Code 2.1.287+). It watches the same session events Flightdeck reads. It doesn't need Flightdeck, and the two run side by side.
+Pushes the live state of each Claude Code session to a AI Orb display: an ESP32-S3 with a 1.28" round GC9A01 screen (firmware in `../firmware`). The mod is a Claude Code mod (function hooks, Claude Code 2.1.287+). It watches the same session events Flightdeck reads. It doesn't need Flightdeck, and the two run side by side.
 
 What it sends (see `../docs/protocol.md`): session state (thinking / tool / **waiting for you** / error / compacting / idle), current tool and target, model and effort, context fill and compactions, session cost, the 5h/7d rate limits with reset times, the running turn's clock, steps, edits and errors, the last turn's receipt, subagents (up to 4), permission totals, time to first token, and a 4-line log.
 

@@ -1,4 +1,4 @@
-// Desk Orb for OpenCode (V1 plugin API, opencode 1.x): pushes each session's status to the orb,
+// AI Orb for OpenCode (V1 plugin API, opencode 1.x): pushes each session's status to the orb,
 // with the same reducers and wire format as the Claude Code mod (../mod/hooks/core.ts, docs/protocol.md).
 //
 // Install: symlink this file into ~/.config/opencode/plugins/ (see README.md). It imports ../mod, so
@@ -71,7 +71,7 @@ export const DeskOrb = async ({ client, directory, worktree }: any, options?: Re
   let retryAt = 0
 
   const toast = (message: string, variant = 'info') =>
-    client?.tui?.showToast?.({ body: { title: 'Desk Orb', message, variant } })?.catch?.(() => undefined)
+    client?.tui?.showToast?.({ body: { title: 'AI Orb', message, variant } })?.catch?.(() => undefined)
 
   /** Re-reads the choice file (tools/orb-choose.py may have changed it) unless options or env fix the URL. */
   const resolve = () => {
