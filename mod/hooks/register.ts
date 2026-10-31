@@ -195,7 +195,7 @@ async function push($: EngineInterface, isHeartbeat = false) {
     const r = await $.http.fetch(`${link.url}/api/state`, { method: 'POST', headers: headers(link.url), body: JSON.stringify(wire) })
     if (!r.ok) {
       const isFound = r.status === 401 && link.url === link.foundUrl && !link.chosen
-      throw new Error(isFound ? 'needs a token: run /orb choose to trust this orb (401)' : r.status === 401 ? 'token refused (401)' : `HTTP ${r.status}`)
+      throw new Error(isFound ? 'this orb wants a token, which goes only to an orb you name: check its address with /orb scan, then /orb choose or /orb use <IP> (401)' : r.status === 401 ? 'token refused (401)' : `HTTP ${r.status}`)
     }
     if (link.failures >= 3) $.ui.status(undefined)
     link.failures = 0
@@ -319,8 +319,21 @@ export const register: Register = (on, options) => {
         return { text: `Desk Orbs on your network (* = this computer's):\n${rows.join('\n')}\n/orb choose picks one.` }
       }
       let pick: { url: string; label: string } | null
-      if (devices.length === 1) pick = { url: deviceUrl(devices[0]!), label: deviceLabel(devices[0]!) }
-      else {
+      if (devices.length === 1) {
+        // Picking trusts the orb with the token, so even the only one found is confirmed by its address.
+        const d = devices[0]!
+        const yes = `Use ${deviceUrl(d)}`
+        try {
+          const answer = await $.ui.ask(`One Desk Orb found: ${deviceLabel(d)} at ${deviceUrl(d)}. Is this your orb? It will receive your device token.`, {
+            options: [yes, 'Cancel'],
+            header: 'Desk Orb',
+          })
+          pick = answer === yes ? { url: deviceUrl(d), label: deviceLabel(d) } : null
+        } catch {
+          pick = null
+        }
+        if (!pick) return { text: `Kept ${link.url}.` }
+      } else {
         try {
           pick = await askForDevice($, devices)
         } catch {
@@ -329,7 +342,7 @@ export const register: Register = (on, options) => {
       }
       if (!pick) return { text: `That names no orb found. Kept ${link.url}.` }
       await choose($, pick)
-      return { text: `Desk Orb -> ${pick.url} (${pick.label}).${devices.length === 1 ? ' It is the only orb found.' : ''}` }
+      return { text: `Desk Orb -> ${pick.url} (${pick.label}).` }
     }
 
     if (verb === 'use') {
