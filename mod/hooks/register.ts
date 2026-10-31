@@ -5,9 +5,13 @@ import type { OrbState } from '../types'
 import {
   ASK_GRACE_MS,
   DEFAULT_STATE,
+  DEFAULT_URL,
+  DISCOVER_SCRIPT,
   baseUrl,
   ctxOfUsage,
   detailOf,
+  deviceLabel,
+  deviceUrl,
   limitOf,
   normalize,
   onAgentEnd,
@@ -19,10 +23,13 @@ import {
   onToolStart,
   onTurnEnd,
   onTurnStart,
+  parseDiscovery,
+  pickDevice,
   projectOf,
   signature,
   toWire,
 } from './core'
+import type { OrbDevice } from './core'
 
 const orb = atom({ plugin: 'deskorb', key: 'orb' } as const, DEFAULT_STATE)
 
@@ -43,7 +50,15 @@ async function costNow($: EngineInterface): Promise<number | null> {
 // The push loop: one request in flight at a time, the latest picture wins, and an unreachable
 // display backs off instead of being asked on every event. Module variables start over on reload.
 const link = {
+  /** Where pushes go: the chosen orb, else the one orb found on the network, else `configUrl`. */
   url: '',
+  /** `deviceUrl` from /config. */
+  configUrl: '',
+  /** This computer's pick among several orbs (`$.store`), while /config's URL is the one it was made under. */
+  chosen: null as Choice | null,
+  /** The single orb a scan found, used for this process when /config still holds the default. */
+  foundUrl: '',
+  didAutoScan: false,
   token: '',
   isEnabled: false,
   timer: null as Timer | null,
@@ -55,14 +70,111 @@ const link = {
   failures: 0,
   retryAt: 0,
   lastResult: 'nothing sent yet',
+  /** The URL the last successful push went to: the orb to tell when this session moves away. */
+  sentTo: '',
 }
+
+// ---------------------------------------------------------------- which orb
+
+type Choice = { url: string; label: string; configUrl: string }
+const CHOICE_KEY = 'device'
+
+const isChoice = (v: unknown): v is Choice =>
+  typeof v === 'object' && v !== null && typeof (v as Choice).url === 'string' && typeof (v as Choice).configUrl === 'string'
+
+/** Re-reads the stored pick (another session on this computer may have changed it) and follows it. */
+async function loadChoice($: EngineInterface) {
+  const v = await $.store.get(CHOICE_KEY).catch(() => undefined)
+  // A pick made under another /config URL is stale: the person changed the setting since.
+  link.chosen = isChoice(v) && v.configUrl === link.configUrl ? v : null
+  await retarget($, link.chosen?.url || link.foundUrl || link.configUrl)
+}
+
+/** Points the pushes at `url`; the orb they leave is told this session ended there. */
+async function retarget($: EngineInterface, url: string) {
+  const old = link.url
+  if (url === old) return
+  link.url = url
+  link.lastSig = ''
+  link.retryAt = 0
+  if (link.failures >= 3) $.ui.status(undefined)
+  link.failures = 0
+  if (old && old === link.sentTo && link.isEnabled) {
+    link.sentTo = ''
+    const sid = await $.session.id()
+    const body = JSON.stringify({ v: 1, sid: sid.slice(0, 12) })
+    void $.http.fetch(`${old}/api/end`, { method: 'POST', headers: headers(), body }).catch(() => undefined)
+  }
+}
+
+async function choose($: EngineInterface, pick: { url: string; label: string }) {
+  const choice: Choice = { url: pick.url, label: pick.label, configUrl: link.configUrl }
+  await $.store.set(CHOICE_KEY, choice)
+  link.chosen = choice
+  await retarget($, pick.url)
+  schedule($, 50)
+}
+
+async function discover($: EngineInterface): Promise<{ devices: OrbDevice[]; error?: string }> {
+  try {
+    const r = await $.process.run(['/bin/sh', '-c', DISCOVER_SCRIPT], { timeoutMs: 10_000 })
+    if (r.stdout.startsWith('#none')) return { devices: [], error: 'no mDNS browser here (needs dns-sd or avahi-browse)' }
+    return { devices: parseDiscovery(r.stdout) }
+  } catch (err) {
+    return { devices: [], error: `could not scan: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+/** Puts the orbs to the person; null when the answer names none. Rejects when dismissed. */
+async function askForDevice($: EngineInterface, devices: readonly OrbDevice[]) {
+  const offered = devices.slice(0, 4)
+  const labels = offered.map(d => `${deviceLabel(d)}${deviceUrl(d) === link.url ? ' - current' : ''}`)
+  const more = devices.length > offered.length ? ` (${devices.length - offered.length} more: type a name or IP under Other)` : ''
+  const answer = await $.ui.ask(`${devices.length} Desk Orbs are on your network. Which one should this computer's sessions show on?${more}`, {
+    options: labels,
+    header: 'Desk Orb',
+  })
+  const i = labels.indexOf(answer)
+  const d = i >= 0 ? offered[i] : undefined
+  return d ? { url: deviceUrl(d), label: deviceLabel(d) } : pickDevice(answer, devices)
+}
+
+/**
+ * Once per process at session start, unless a pick is stored or /config names a URL of its own: one orb
+ * on the network is used as found; several are put to the person, and the answer is kept.
+ */
+async function autoDiscover($: EngineInterface, isInteractive: boolean) {
+  if (!link.isEnabled || link.chosen || link.didAutoScan || link.configUrl !== DEFAULT_URL) return
+  link.didAutoScan = true
+  const { devices } = await discover($)
+  if (devices.length === 1) {
+    link.foundUrl = deviceUrl(devices[0]!)
+    if (!link.chosen) await retarget($, link.foundUrl)
+    schedule($, 50)
+    return
+  }
+  if (devices.length < 2 || !isInteractive) return
+  await loadChoice($) // another session may have asked while this one scanned
+  if (link.chosen) return
+  try {
+    const pick = await askForDevice($, devices)
+    if (!pick) return
+    await choose($, pick)
+    $.ui.log(`Desk Orb: this computer now reports to ${pick.label}. /orb choose changes it.`)
+  } catch {
+    $.ui.log('Desk Orb: several orbs are on your network; run /orb choose to pick one.')
+  }
+}
+
+const sourceOf = () =>
+  link.chosen ? `${link.chosen.label}, chosen with /orb choose` : link.foundUrl && link.url === link.foundUrl ? 'the one orb found on the network' : 'from /config'
 
 function headers(): Record<string, string> {
   return { 'Content-Type': 'application/json', ...(link.token ? { 'X-Orb-Token': link.token } : {}) }
 }
 
 async function push($: EngineInterface, isHeartbeat = false) {
-  if (!link.isEnabled) return
+  if (!link.isEnabled || !link.url) return
   if (link.isSending) {
     link.isDirty = true
     return
@@ -82,6 +194,7 @@ async function push($: EngineInterface, isHeartbeat = false) {
     link.retryAt = 0
     link.lastSig = sig
     link.lastSentAt = now
+    link.sentTo = link.url
     link.lastResult = `ok, ${wire.state}`
   } catch (err) {
     link.failures += 1
@@ -107,7 +220,9 @@ function schedule($: EngineInterface, ms = DEBOUNCE_MS) {
 
 function startHeartbeat($: EngineInterface) {
   link.heartbeat?.cancel()
-  link.heartbeat = link.isEnabled ? $.clock.every(HEARTBEAT_MS, () => void push($, true).catch(() => undefined)) : null
+  link.heartbeat = link.isEnabled
+    ? $.clock.every(HEARTBEAT_MS, () => void loadChoice($).then(() => push($, true)).catch(() => undefined))
+    : null
 }
 
 function recheckLater($: EngineInterface, ms: number) {
@@ -125,16 +240,18 @@ async function mutate($: EngineInterface, fn: (s: OrbState) => OrbState) {
 }
 
 export const register: Register = (on, options) => {
-  link.url = baseUrl(typeof options.deviceUrl === 'string' ? options.deviceUrl : '')
+  link.configUrl = baseUrl(typeof options.deviceUrl === 'string' ? options.deviceUrl : '')
+  link.url = link.chosen?.url || link.foundUrl || link.configUrl
   link.token = typeof options.token === 'string' ? options.token.trim() : ''
-  link.isEnabled = options.enabled !== false && link.url !== ''
+  link.isEnabled = options.enabled !== false
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'orb',
       description: 'Desk Orb display: show its connection, or send a test push',
-      argumentHint: '[status|test]',
+      argumentHint: '[status|test|scan|choose|use <name, IP or URL>|reset]',
     })
+    await loadChoice($)
     const u = await $.session.usage().catch(() => null)
     await update($, orb, x => {
       const s = normalize(x)
@@ -154,11 +271,12 @@ export const register: Register = (on, options) => {
     })
     startHeartbeat($)
     schedule($, 50)
+    void autoDiscover($, e.isInteractive).catch(() => undefined)
     return next(e)
   })
 
   on('session.end', async ($, e, next) => {
-    if (link.isEnabled) {
+    if (link.isEnabled && link.url) {
       const body = JSON.stringify({ v: 1, sid: e.sessionId.slice(0, 12) })
       await $.http.fetch(`${link.url}/api/end`, { method: 'POST', headers: headers(), body }).catch(() => undefined)
     }
@@ -177,8 +295,51 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'orb' }, async ($, e) => {
-    const verb = e.args.trim().split(/\s+/)[0] || 'status'
-    if (!link.isEnabled) return { text: 'Desk Orb is off: set a Device URL and turn it on in /config.' }
+    const args = e.args.trim()
+    const verb = args.split(/\s+/)[0] || 'status'
+    const rest = args.slice(verb.length).trim()
+    if (!link.isEnabled) return { text: 'Desk Orb is off: turn it on in /config.' }
+    await loadChoice($)
+
+    if (verb === 'scan' || verb === 'choose') {
+      const { devices, error } = await discover($)
+      if (devices.length === 0) {
+        return { text: `No Desk Orbs found${error ? ` (${error})` : ''}. Pushing to ${link.url || 'nothing'}; /orb use <IP> sets one by hand.` }
+      }
+      if (verb === 'scan') {
+        const rows = devices.map(d => `${deviceUrl(d) === link.url ? '*' : ' '} ${deviceLabel(d)}  ${deviceUrl(d)}${d.fw ? `  fw ${d.fw}` : ''}`)
+        return { text: `Desk Orbs on your network (* = this computer's):\n${rows.join('\n')}\n/orb choose picks one.` }
+      }
+      let pick: { url: string; label: string } | null
+      if (devices.length === 1) pick = { url: deviceUrl(devices[0]!), label: deviceLabel(devices[0]!) }
+      else {
+        try {
+          pick = await askForDevice($, devices)
+        } catch {
+          return { text: `Kept ${link.url}.` }
+        }
+      }
+      if (!pick) return { text: `That names no orb found. Kept ${link.url}.` }
+      await choose($, pick)
+      return { text: `Desk Orb -> ${pick.url} (${pick.label}).${devices.length === 1 ? ' It is the only orb found.' : ''}` }
+    }
+
+    if (verb === 'use') {
+      const pick = pickDevice(rest, [])
+      if (!pick) return { text: 'Usage: /orb use <name.local, IP or URL>' }
+      await choose($, pick)
+      return { text: `Desk Orb -> ${pick.url}` }
+    }
+
+    if (verb === 'reset') {
+      await $.store.set(CHOICE_KEY, null)
+      link.chosen = null
+      await retarget($, link.foundUrl || link.configUrl)
+      schedule($, 50)
+      return { text: `Forgot the chosen orb. Desk Orb -> ${link.url} (${sourceOf()}).` }
+    }
+
+    if (!link.url) return { text: 'Desk Orb has no device: run /orb choose, or set a Device URL in /config.' }
     if (verb === 'test') {
       link.lastSig = ''
       link.retryAt = 0
@@ -186,7 +347,9 @@ export const register: Register = (on, options) => {
       return { text: `Desk Orb -> ${link.url}: ${link.lastResult}` }
     }
     const ago = link.lastSentAt ? `${Math.round(((await $.clock.now()) - link.lastSentAt) / 1000)}s ago` : 'never'
-    return { text: `Desk Orb -> ${link.url}\nlast push: ${link.lastResult} (${ago})${link.failures ? `, ${link.failures} failures in a row` : ''}` }
+    return {
+      text: `Desk Orb -> ${link.url} (${sourceOf()})\nlast push: ${link.lastResult} (${ago})${link.failures ? `, ${link.failures} failures in a row` : ''}`,
+    }
   })
 
   on('classic.UserPromptSubmit', async ($, e, next) => {

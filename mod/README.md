@@ -23,13 +23,30 @@ or from a clone, for one session: `claude --plugin-dir ./ai-orb/mod`.
 ## Configure (`/config`, or `pluginConfigs["deskorb@desk-orb"].options` in `~/.claude/settings.json`)
 | Option | Default | |
 |---|---|---|
-| `deviceUrl` | `http://claude-orb.local` | the display, or its IP if mDNS is unreliable on your network |
+| `deviceUrl` | `http://claude-orb.local` | the display, or its IP if mDNS is unreliable on your network; a non-default value turns off the automatic scan |
 | `token` | empty | must match the token on the device's settings page |
 | `enabled` | `true` | |
 
 ## Commands
-- `/orb` shows the device URL and the result of the last push.
+- `/orb` shows the device URL, where it came from, and the result of the last push.
 - `/orb test` sends a snapshot now and reports the result.
+- `/orb scan`, `/orb choose`, `/orb use <name, IP or URL>`, `/orb reset`: see below.
+
+### More than one orb
+At the start of a session the mod looks for orbs on your network (about 2 s, in the background), as long as `deviceUrl` is still the default and nothing has been chosen yet:
+- **One orb found:** it is used, whatever its name.
+- **Several found:** Claude Code asks which one this computer's sessions should show on. The answer is saved for every session on this computer, so you're asked once.
+
+You can change it any time:
+| Command | |
+|---|---|
+| `/orb scan` | lists the orbs on your network; `*` marks the one this computer reports to |
+| `/orb choose` | scans and asks you to pick one |
+| `/orb use <name, IP or URL>` | picks one by hand, e.g. `/orb use desk.local` or `/orb use 192.168.1.50` |
+| `/orb reset` | forgets the pick and goes back to `deviceUrl` |
+
+Give each orb its own name on its settings page (e.g. `desk-orb`, `kitchen-orb`). Two orbs that are both named `claude-orb` still work, but one of them can only be reached by its IP, which can change.
+Setting `deviceUrl` in `/config` to anything other than the default turns the automatic scan off, and a pick made under one `deviceUrl` is dropped when you change it. Scanning needs `dns-sd` (built into macOS) or `avahi-browse` (Linux, package `avahi-utils`). On Windows, set `deviceUrl` or use `/orb use <IP>`.
 
 ## Develop
 ```sh

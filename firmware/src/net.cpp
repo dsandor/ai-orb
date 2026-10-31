@@ -38,10 +38,18 @@ static void startMdns() {
     Serial.println("[net] mDNS start failed");
     return;
   }
-  MDNS.addService("http", "tcp", ORB_HTTP_PORT);
-  MDNS.addServiceTxt("http", "tcp", "fw", FW_VERSION);
-  MDNS.addServiceTxt("http", "tcp", "proto", "1");
-  MDNS.addServiceTxt("http", "tcp", "api", "/api/state");
+  MDNS.setInstanceName(host);
+  // _claude-orb._tcp is how the Claude Code mod finds orbs (/orb choose); _http._tcp is for browsers
+  // and older mods. Both carry the name and IP: when two orbs share a name, mDNS renames one of
+  // them on the wire (claude-orb-2.local) and the mod has to reach that one by its IP.
+  for (const char* svc : {"claude-orb", "http"}) {
+    MDNS.addService(svc, "tcp", ORB_HTTP_PORT);
+    MDNS.addServiceTxt(svc, "tcp", "fw", FW_VERSION);
+    MDNS.addServiceTxt(svc, "tcp", "proto", "1");
+    MDNS.addServiceTxt(svc, "tcp", "api", "/api/state");
+    MDNS.addServiceTxt(svc, "tcp", "name", host);
+    MDNS.addServiceTxt(svc, "tcp", "ip", ipStr);
+  }
   Serial.printf("[net] mDNS http://%s.local\n", host);
 }
 

@@ -49,6 +49,13 @@ Sent on change (debounced, at most every 400 ms) and as a heartbeat every 10 s. 
 ## GET /api/info
 Device answers `{ "name": "claude-orb", "fw": "0.1.0", "ip": "...", "sessions": 1, "uptimeMs": 123 }`.
 
+## Discovery (mDNS)
+The device advertises `_claude-orb._tcp` (and `_http._tcp`, for browsers) on port 80 with TXT records
+`fw`, `proto=1`, `api=/api/state`, `name` (its configured host name) and `ip`. The mod browses for both with
+`dns-sd` (macOS) or `avahi-browse` (Linux); an `_http._tcp` instance counts only if its TXT has `api=/api/state`.
+Two orbs with the same name collide in mDNS and one is renamed on the wire (`claude-orb-2.local`); since the
+device only answers its own `<name>.local` or its IP, the mod reaches a renamed orb by the `ip` from its TXT.
+
 ## Device behaviour
 - Holds up to 4 sessions keyed by `sid`. A session not heard from for 45 s is shown as stale (dimmed); after 5 min it is dropped.
 - Focus: any session in `waiting` wins (attention screen). Otherwise the most recently changed non-idle session;

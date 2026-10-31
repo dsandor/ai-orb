@@ -333,8 +333,125 @@ export const toWire = (s: OrbState, sid: string, now: number) => {
 export const signature = (w: Wire) =>
   JSON.stringify({ ...w, turn: { ...w.turn, elapsedMs: 0 }, limits: w.limits.map(l => ({ ...l, resetInMs: 0 })), agents: { ...w.agents, list: w.agents.list.map(a => ({ ...a, elapsedMs: 0 })) } })
 
+/** The plugin.json default for `deviceUrl`, as `baseUrl` writes it. */
+export const DEFAULT_URL = 'http://claude-orb.local'
+
 export const baseUrl = (url: string) => {
   const u = url.trim().replace(/\/+$/, '')
   if (!u) return ''
   return /^https?:\/\//i.test(u) ? u : `http://${u}`
+}
+
+// ---------------------------------------------------------------- finding orbs on the LAN
+
+/** One orb as mDNS advertises it (`_claude-orb._tcp`, or `_http._tcp` with `api=/api/state`). */
+export type OrbDevice = { name: string; host: string; ip: string; port: number; fw: string }
+
+/** Browses both service types for 2 s with whichever mDNS tool the host has (macOS, then Linux). */
+export const DISCOVER_SCRIPT = [
+  'if command -v dns-sd >/dev/null 2>&1; then',
+  '  echo "#dns-sd"',
+  '  dns-sd -Z _claude-orb._tcp local & a=$!',
+  '  dns-sd -Z _http._tcp local & b=$!',
+  '  sleep 2; kill $a $b 2>/dev/null; wait 2>/dev/null',
+  'elif command -v avahi-browse >/dev/null 2>&1; then',
+  '  echo "#avahi"',
+  '  avahi-browse -rpt _claude-orb._tcp 2>/dev/null',
+  '  avahi-browse -rpt _http._tcp 2>/dev/null',
+  'else',
+  '  echo "#none"',
+  'fi',
+].join('\n')
+
+/** DNS-SD escapes: `\032` is a decimal byte, `\.` a literal character. */
+const unescapeDns = (s: string) => s.replace(/\\(\d{3})|\\(.)/g, (_, d: string | undefined, c: string | undefined) => (d ? String.fromCharCode(Number(d)) : (c ?? '')))
+
+const txtOf = (s: string) => {
+  const out: Record<string, string> = {}
+  for (const m of s.matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
+    const kv = unescapeDns(m[1] ?? '')
+    const eq = kv.indexOf('=')
+    if (eq > 0) out[kv.slice(0, eq).toLowerCase()] = kv.slice(eq + 1)
+  }
+  return out
+}
+
+const stripDot = (h: string) => h.replace(/\.$/, '')
+
+type Found = { type: string; host: string; port: number; ip: string; txt: Record<string, string> }
+
+const toDevice = (f: Found): OrbDevice | null => {
+  if (f.type.includes('_http.') && f.txt.api !== '/api/state') return null
+  if (!f.host && !f.ip) return null
+  return { name: f.txt.name || f.host.replace(/\.local$/i, ''), host: f.host, ip: f.txt.ip || f.ip, port: f.port || 80, fw: f.txt.fw ?? '' }
+}
+
+/** The orbs in `DISCOVER_SCRIPT`'s output, one per host and port, sorted by name. */
+export const parseDiscovery = (out: string): OrbDevice[] => {
+  const found = new Map<string, Found>()
+  const at = (key: string, type: string) => {
+    const f = found.get(key) ?? { type, host: '', port: 0, ip: '', txt: {} }
+    found.set(key, f)
+    return f
+  }
+  for (const line of out.split(/\r?\n/)) {
+    // dns-sd -Z: `Name._claude-orb._tcp   SRV   0 0 80 host.local. ; ...` and `... TXT "k=v" ...`
+    const z = /^(\S+?\.(_claude-orb|_http)\._tcp)\s+(SRV|TXT)\s+(.*)$/.exec(line)
+    if (z) {
+      const f = at(z[1]!, `${z[2]}._tcp`)
+      if (z[3] === 'SRV') {
+        const srv = /^\d+\s+\d+\s+(\d+)\s+(\S+)/.exec(z[4]!)
+        if (srv) {
+          f.port = Number(srv[1])
+          f.host = stripDot(srv[2]!)
+        }
+      } else f.txt = { ...f.txt, ...txtOf(z[4]!) }
+      continue
+    }
+    // avahi-browse -rp: `=;iface;IPv4;Name;_claude-orb._tcp;local;host.local;192.168.1.5;80;"k=v" ...`
+    const a = line.split(';')
+    if (a[0] === '=' && a.length >= 9 && a[2] === 'IPv4' && /^_(claude-orb|http)\._tcp$/.test(a[4]!)) {
+      const f = at(`${a[3]}.${a[4]}`, `${a[4]}`)
+      f.host = stripDot(a[6]!)
+      f.ip = a[7]!
+      f.port = Number(a[8]) || 80
+      f.txt = txtOf(a.slice(9).join(';'))
+    }
+  }
+  const devices = new Map<string, OrbDevice>()
+  // A dedicated `_claude-orb` record wins over the same orb's `_http` one.
+  const ordered = [...found.values()].sort((x, y) => Number(x.type.startsWith('_http')) - Number(y.type.startsWith('_http')))
+  for (const f of ordered) {
+    const d = toDevice(f)
+    if (!d) continue
+    const key = `${(d.ip || d.host).toLowerCase()}:${d.port}`
+    if (!devices.has(key)) devices.set(key, d)
+  }
+  return [...devices.values()].sort((x, y) => x.name.localeCompare(y.name) || x.ip.localeCompare(y.ip))
+}
+
+/**
+ * Where to reach an orb: its `.local` name, unless mDNS had to rename it on the wire (two orbs with one
+ * name, so its host is not `<name>.local`) or the host is unknown; the orb only answers its own names.
+ */
+export const deviceUrl = (d: OrbDevice) => {
+  const port = d.port && d.port !== 80 ? `:${d.port}` : ''
+  const isOwnName = d.host !== '' && d.host.toLowerCase() === `${d.name.toLowerCase()}.local`
+  return `http://${isOwnName || !d.ip ? d.host : d.ip}${port}`
+}
+
+export const deviceLabel = (d: OrbDevice) => {
+  const where = d.ip || d.host
+  return where && where !== d.name ? `${d.name} (${where})` : d.name
+}
+
+/** The orb an answer names: a label as offered, or a name, host, IP or URL typed under Other. */
+export const pickDevice = (answer: string, devices: readonly OrbDevice[]): { url: string; label: string } | null => {
+  const a = answer.trim()
+  if (!a) return null
+  const byLabel = devices.find(d => deviceLabel(d) === a)
+  const lower = a.toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  const d = byLabel ?? devices.find(x => [x.name, x.host, x.ip].some(v => v && v.toLowerCase() === lower))
+  if (d) return { url: deviceUrl(d), label: deviceLabel(d) }
+  return /^[\w.-]+(:\d+)?$|^https?:\/\//i.test(a) ? { url: baseUrl(a), label: a } : null
 }

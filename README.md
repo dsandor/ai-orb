@@ -13,7 +13,9 @@ The display only receives. A small Claude Code mod pushes a JSON snapshot whenev
 | [`mod/`](mod/README.md) | the Claude Code mod (`deskorb`) that pushes status |
 | [`firmware/`](firmware/README.md) | PlatformIO firmware for the ESP32-S3 + GC9A01 |
 | [`docs/protocol.md`](docs/protocol.md) | the JSON contract between the two |
+| [`opencode/`](opencode/README.md) | the same status push as an OpenCode plugin |
 | `tools/simulate.py` | drives the display with fake sessions, no Claude Code needed |
+| `tools/orb-choose.py` | finds orbs on your network and picks the one OpenCode reports to |
 
 ## What you need
 - An ESP32-S3 Super Mini and a 1.28" GC9A01 round SPI module (the 7-pin kind), or a Waveshare ESP32-S3-LCD-1.28 (untested).
@@ -77,10 +79,39 @@ Settings are in `/config`, or under `pluginConfigs["deskorb@desk-orb"].options` 
 | `enabled` | `true` | turns pushing off without uninstalling |
 
 Commands:
-- `/orb` shows the device URL and the result of the last push.
+- `/orb` shows the device URL, where it came from, and the result of the last push.
 - `/orb test` sends a snapshot now.
+- `/orb scan` lists the orbs on your network, `/orb choose` picks one, `/orb use <IP>` sets one by hand, `/orb reset` goes back to `deviceUrl`.
+
+**Several orbs on one network:** the mod finds them over mDNS when a session starts and asks once which one this computer reports to. Give each orb its own name on its settings page. Details in [`mod/README.md`](mod/README.md#more-than-one-orb).
 
 To update: `claude plugin update deskorb@desk-orb`, then `/reload-plugins`.
+
+### Claude Desktop (the Code tab)
+The desktop app's **Code** tab runs Claude Code, and mods run there too. Plugins installed at user scope are shared with the terminal CLI through `~/.claude/settings.json`, so if you already ran the steps above on this computer, there's nothing more to do.
+
+To install from the desktop app:
+1. Open the **Code** tab and start a local session.
+2. Run `/status` and check that the Claude Code version is **2.1.287 or newer**. The app ships its own copy of Claude Code, so it can be older than your terminal's.
+3. Type the same commands at the prompt:
+   ```
+   /plugin marketplace add dsandor/ai-orb
+   /plugin install deskorb@desk-orb
+   ```
+   Once the marketplace is added, you can also install from **+ > Add plugins** (or **+ > Plugins > Browse plugins**), choosing **user** scope.
+4. Start a new session and run `/orb test`.
+
+Set options in `/config`, or with `/plugin configure deskorb@desk-orb`. Notes:
+- If `/orb scan` says it can't scan in the desktop app (running commands on the computer may be CLI-only), point it at the orb with `/orb use <IP>`, or run `/orb choose` once from the terminal CLI and keep its choice.
+- Plugins don't load in cloud sessions or WSL sessions.
+- Regular Claude Desktop **chat** (outside the Code tab) can't run mods or hooks, so it can't report to the orb.
+
+### OpenCode
+See [`opencode/README.md`](opencode/README.md). In short, symlink the plugin into OpenCode's plugin folder and restart OpenCode:
+```sh
+ln -s ~/ai-orb/opencode/deskorb.ts ~/.config/opencode/plugins/deskorb.ts
+```
+Pick an orb with `python3 tools/orb-choose.py`, or set `ORB_URL`.
 
 ## What the display shows
 - **Session:**

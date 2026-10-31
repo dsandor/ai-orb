@@ -4,6 +4,8 @@ import {
   ASK_GRACE_MS,
   DEFAULT_STATE,
   baseUrl,
+  deviceLabel,
+  deviceUrl,
   detailOf,
   fit,
   normalize,
@@ -15,6 +17,8 @@ import {
   onToolStart,
   onTurnEnd,
   onTurnStart,
+  parseDiscovery,
+  pickDevice,
   prettyModel,
   signature,
   stateOf,
@@ -89,6 +93,53 @@ test('models and URLs read as people write them', () => {
   expect(baseUrl(' https://10.0.0.5 ')).toBe('https://10.0.0.5')
 })
 
+// ---------------------------------------------------------------- finding orbs
+
+const DNS_SD = `#dns-sd
+Browsing for _claude-orb._tcp.local
+_claude-orb._tcp                                PTR     desk._claude-orb._tcp
+desk._claude-orb._tcp                           SRV     0 0 80 desk.local. ; Replace with unicast FQDN of target host
+desk._claude-orb._tcp                           TXT     "fw=0.1.0" "proto=1" "api=/api/state" "name=desk" "ip=192.168.1.50"
+claude-orb._claude-orb._tcp                     SRV     0 0 80 claude-orb.local. ; Replace with unicast FQDN of target host
+claude-orb._claude-orb._tcp                     TXT     "fw=0.1.0" "proto=1" "api=/api/state" "name=claude-orb" "ip=192.168.1.60"
+claude-orb\\0322._claude-orb._tcp              SRV     0 0 80 claude-orb-2.local. ; Replace with unicast FQDN of target host
+claude-orb\\0322._claude-orb._tcp              TXT     "fw=0.1.0" "proto=1" "api=/api/state" "name=claude-orb" "ip=192.168.1.61"
+Browsing for _http._tcp.local
+desk._http._tcp                                 SRV     0 0 80 desk.local. ; Replace with unicast FQDN of target host
+desk._http._tcp                                 TXT     "fw=0.1.0" "proto=1" "api=/api/state" "name=desk" "ip=192.168.1.50"
+EPSON\\032ET-3830._http._tcp                    SRV     0 0 80 EPSON457210.local. ; Replace with unicast FQDN of target host
+EPSON\\032ET-3830._http._tcp                    TXT     ""
+old._http._tcp                                  SRV     0 0 80 old-orb.local. ; Replace with unicast FQDN of target host
+old._http._tcp                                  TXT     "fw=0.0.9" "proto=1" "api=/api/state"
+`
+
+test('dns-sd: orbs found once each, printers left out, a renamed twin reached by IP', () => {
+  const ds = parseDiscovery(DNS_SD)
+  expect(ds.map(deviceLabel)).toEqual(['claude-orb (192.168.1.60)', 'claude-orb (192.168.1.61)', 'desk (192.168.1.50)', 'old-orb (old-orb.local)'])
+  expect(ds.map(deviceUrl)).toEqual(['http://claude-orb.local', 'http://192.168.1.61', 'http://desk.local', 'http://old-orb.local'])
+})
+
+test('avahi: resolved IPv4 rows', () => {
+  const out = [
+    '#avahi',
+    '+;eth0;IPv4;desk;_claude-orb._tcp;local',
+    '=;eth0;IPv6;desk;_claude-orb._tcp;local;desk.local;fe80::1;80;"name=desk"',
+    '=;eth0;IPv4;desk;_claude-orb._tcp;local;desk.local;192.168.1.50;80;"fw=0.1.0" "name=desk" "ip=192.168.1.50"',
+    '=;eth0;IPv4;Kitchen\\032TV;_http._tcp;local;tv.local;192.168.1.9;8080;',
+  ].join('\n')
+  expect(parseDiscovery(out)).toEqual([{ name: 'desk', host: 'desk.local', ip: '192.168.1.50', port: 80, fw: '0.1.0' }])
+  expect(parseDiscovery('#none\n')).toEqual([])
+})
+
+test('an answer names an orb by label, name, IP, or a typed URL', () => {
+  const ds = parseDiscovery(DNS_SD)
+  expect(pickDevice('desk (192.168.1.50)', ds)).toEqual({ url: 'http://desk.local', label: 'desk (192.168.1.50)' })
+  expect(pickDevice('192.168.1.61', ds)?.url).toBe('http://192.168.1.61')
+  expect(pickDevice('DESK', ds)?.url).toBe('http://desk.local')
+  expect(pickDevice('10.0.0.7', ds)).toEqual({ url: 'http://10.0.0.7', label: '10.0.0.7' })
+  expect(pickDevice('no idea which', ds)).toBeNull()
+})
+
 // ---------------------------------------------------------------- through the engine
 
 test('a session start pushes a snapshot to the device', { options: { deviceUrl: 'http://orb.test', token: 'sekrit' } }, async ($, on) => {
@@ -131,4 +182,44 @@ test('a session start pushes a snapshot to the device', { options: { deviceUrl: 
   await clock.advance(6_000)
   await clock.settle()
   expect(sent.length).toBe(2)
+})
+
+test('several orbs found: the person picks one, it is kept, and pushes go there', { options: { deviceUrl: 'http://claude-orb.local' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  const stored: Record<string, unknown> = {}
+  on('store.get', (_, e) => ({ value: stored[e.key] }))
+  on('store.set', (_, e) => {
+    stored[e.key] = e.value
+    return { value: undefined }
+  })
+  const logged: string[] = []
+  on('ui.log', (_, e) => {
+    logged.push(e.text)
+    return { value: undefined }
+  })
+  const urls: string[] = []
+  const asked: string[][] = []
+  on('command.register', () => ({ value: { command: 'orb' } }))
+  on('session.id', () => ({ value: 'session-0123456789abcdef' }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: DNS_SD, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('tool.call', { tool: 'AskUserQuestion' }, (_, e) => {
+    const q = e.questions[0]!
+    asked.push(q.options.map(o => o.label))
+    return { result: { questions: e.questions, answers: { [q.question]: 'desk (192.168.1.50)' } } }
+  })
+  on('http.fetch', (_, e) => {
+    urls.push(e.url)
+    return { value: { status: 200, ok: true, headers: {}, text: '' } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/Users/me/Projects/aistatus', surface: 'terminal', isInteractive: true })
+  await clock.advance(100)
+  await clock.settle()
+
+  expect(asked).toEqual([['claude-orb (192.168.1.60) - current', 'claude-orb (192.168.1.61)', 'desk (192.168.1.50)', 'old-orb (old-orb.local)']])
+  expect(logged[0]).toContain('desk (192.168.1.50)')
+  expect(stored.device).toEqual({ url: 'http://desk.local', label: 'desk (192.168.1.50)', configUrl: 'http://claude-orb.local' })
+  expect(urls[urls.length - 1]).toBe('http://desk.local/api/state')
 })
