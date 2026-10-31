@@ -1,4 +1,4 @@
-# Claude Orb firmware
+# AI Orb firmware
 
 ESP32-S3 + round 1.28" GC9A01 (240x240) display that shows live Claude Code
 session status pushed to it over Wi-Fi. The Claude Code side (`../mod/`) POSTs
@@ -84,7 +84,7 @@ up as a serial port, hold BOOT while plugging it in.
 ## First boot / Wi-Fi setup
 
 1. Power the orb. With no saved Wi-Fi it starts an open access point,
-   **`Claude-Orb-Setup`**, and the screen shows instructions.
+   **`AI-Orb-Setup`**, and the screen shows instructions.
 2. Join that network from a phone or laptop. The captive portal should open on
    its own; if it doesn't, browse to `http://192.168.4.1`.
 3. Pick your network, enter the password, and optionally set a name (the mDNS

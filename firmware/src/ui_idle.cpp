@@ -111,7 +111,7 @@ void drawSetup(const Frame& f) {
   spark(CX, 56, 14, Glyph::Thinking, now, pal::ORANGE);
 
   font(F_BOLD);
-  text("Claude Orb", (int32_t)CX, 94, pal::TEXT);
+  text("AI Orb", (int32_t)CX, 94, pal::TEXT);
   font(F_SMALL);
   text("Wi-Fi setup", (int32_t)CX, 114, pal::DIM);
   text("join network", (int32_t)CX, 138, pal::FAINT);

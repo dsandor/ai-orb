@@ -44,7 +44,7 @@ void pollButton(uint32_t now) {
 void setup() {
   Serial.begin(115200);
   delay(50);
-  Serial.printf("\n[orb] Claude Orb fw %s (%s)\n", FW_VERSION, BOARD_NAME);
+  Serial.printf("\n[orb] AI Orb fw %s (%s)\n", FW_VERSION, BOARD_NAME);
 
   settingsLoad();
   sessionsBegin();

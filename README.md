@@ -45,7 +45,7 @@ pio run -e esp32s3_round -t upload
 Use `-e waveshare_s3_lcd128` for the Waveshare board. If the board doesn't show up as a serial port, hold BOOT while plugging it in.
 
 ## 3. Connect it to Wi-Fi
-1. On first boot the display shows **Wi-Fi setup** and opens an access point called **`Claude-Orb-Setup`**.
+1. On first boot the display shows **Wi-Fi setup** and opens an access point called **`AI-Orb-Setup`**.
 2. Join it from your phone or laptop. The setup page opens by itself; if it doesn't, go to `http://192.168.4.1`.
 3. Pick your network and enter the password. You can also set a device name, an API token and a time zone here.
 4. The display reboots, joins your network, and shows its IP and `claude-orb.local`.

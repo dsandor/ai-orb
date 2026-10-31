@@ -47,7 +47,7 @@
 
 // --- Network ---------------------------------------------------------------------
 #define ORB_DEFAULT_NAME   "claude-orb"
-#define ORB_AP_SSID        "Claude-Orb-Setup"
+#define ORB_AP_SSID        "AI-Orb-Setup"
 #define ORB_HTTP_PORT      80
 #define ORB_STA_TIMEOUT_MS 20000UL   // give up on a boot STA connect after this
 #define ORB_STA_RETRY_MS   60000UL   // retry stored creds from AP mode this often

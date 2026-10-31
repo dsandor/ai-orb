@@ -5,7 +5,7 @@
 enum class NetState : uint8_t {
   Connecting,   // STA attempt in progress (boot, or retry from AP mode)
   Connected,    // STA up, HTTP API reachable on the LAN
-  Setup,        // captive-portal AP "Claude-Orb-Setup" is up
+  Setup,        // captive-portal AP "AI-Orb-Setup" is up
 };
 
 void        netBegin();

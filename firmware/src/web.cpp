@@ -282,8 +282,8 @@ static bool formAuthorized();
 static void handleSetupPage() {
   String h;
   h.reserve(9000);
-  pageHead(h, "Claude Orb setup");
-  h += F("<h1><i></i>Claude Orb</h1><div class=sub>Wi-Fi setup</div>"
+  pageHead(h, "AI Orb setup");
+  h += F("<h1><i></i>AI Orb</h1><div class=sub>Wi-Fi setup</div>"
          "<form method=post action=/setup><h2>Network</h2><div class=card>"
          "<label>Wi-Fi network</label><input name=ssid list=nets required maxlength=32 value='");
   h += esc(settings.ssid);
@@ -350,8 +350,8 @@ static String fmtAge(uint32_t ms) {
 static void handleSettingsPage() {
   String h;
   h.reserve(11000);
-  pageHead(h, "Claude Orb");
-  h += F("<h1><i></i>Claude Orb</h1><div class=sub>");
+  pageHead(h, "AI Orb");
+  h += F("<h1><i></i>AI Orb</h1><div class=sub>");
   h += esc(netHostname());
   h += F(".local &middot; ");
   h += netIp();
