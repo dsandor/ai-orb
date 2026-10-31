@@ -2,6 +2,12 @@
 
 A round desk display for Claude Code, inspired by [BambuHelper](https://github.com/Keralots/BambuHelper). An ESP32-S3 with a 1.28" GC9A01 screen shows what each of your Claude Code sessions is doing: thinking or running a tool, context fill, cost, rate limits, subagents and permission totals. When a session is waiting for you to approve something, the whole display pulses amber.
 
+<p align="center">
+  <img src="docs/images/session.jpg" width="420" alt="The orb's session screen: project xray on Opus 5.5 at medium effort in bypass mode, 19% context used (187k tokens), a 0:24 turn timer, $28.34 session cost with the last turn at +$0.11, and the context ring on the left">
+  <img src="docs/images/agents.jpg" width="420" alt="The orb's agents screen: 0 of 5 agents running, listing four finished subagents with their tasks, elapsed times and step counts">
+</p>
+<p align="center"><em>The session screen (left) and the subagents screen (right), in the 3D-printed enclosure from <a href="3d/README.md"><code>3d/</code></a>.</em></p>
+
 ```
 Claude Code session ──(deskorb mod)── HTTP POST on your LAN ──▶ ESP32-S3 + GC9A01  (claude-orb.local)
 ```
