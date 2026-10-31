@@ -131,6 +131,22 @@ test('avahi: resolved IPv4 rows', () => {
   expect(parseDiscovery('#none\n')).toEqual([])
 })
 
+test('advertised addresses that are not a LAN IP or a plain host name are refused', () => {
+  const out = [
+    'evil._claude-orb._tcp   SRV     0 0 80 evil.local. ; x',
+    'evil._claude-orb._tcp   TXT     "name=x@attacker.com/" "ip=8.8.8.8"',
+    'bad._claude-orb._tcp    SRV     0 0 80 a@b.com/x. ; x',
+    'bad._claude-orb._tcp    TXT     "ip=example.com"',
+    'ok._claude-orb._tcp     SRV     0 0 80 bogus/host. ; x',
+    'ok._claude-orb._tcp     TXT     "name=ok" "ip=172.20.1.2"',
+  ].join('\n')
+  expect(parseDiscovery(out)).toEqual([
+    { name: 'evil', host: 'evil.local', ip: '', port: 80, fw: '' },
+    { name: 'ok', host: '', ip: '172.20.1.2', port: 80, fw: '' },
+  ])
+  expect(parseDiscovery(out).map(deviceUrl)).toEqual(['http://evil.local', 'http://172.20.1.2'])
+})
+
 test('an answer names an orb by label, name, IP, or a typed URL', () => {
   const ds = parseDiscovery(DNS_SD)
   expect(pickDevice('desk (192.168.1.50)', ds)).toEqual({ url: 'http://desk.local', label: 'desk (192.168.1.50)' })
@@ -222,4 +238,28 @@ test('several orbs found: the person picks one, it is kept, and pushes go there'
   expect(logged[0]).toContain('desk (192.168.1.50)')
   expect(stored.device).toEqual({ url: 'http://desk.local', label: 'desk (192.168.1.50)', configUrl: 'http://claude-orb.local' })
   expect(urls[urls.length - 1]).toBe('http://desk.local/api/state')
+})
+
+test('one orb found is used, but gets no token until the person picks it', { options: { deviceUrl: 'http://claude-orb.local', token: 'sekrit' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  mock.store(on)
+  const sent: { url: string; token?: string }[] = []
+  on('command.register', () => ({ value: { command: 'orb' } }))
+  on('session.id', () => ({ value: 'session-0123456789abcdef' }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }))
+  const one = DNS_SD.split('\n').filter(l => !l.includes('claude-orb') && !l.includes('old')).join('\n')
+  on('process.run', () => ({ value: { exitCode: 0, stdout: one, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', (_, e) => {
+    sent.push({ url: e.url, token: e.init?.headers?.['X-Orb-Token'] })
+    return { value: { status: 200, ok: true, headers: {}, text: '' } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/Users/me/Projects/aistatus', surface: 'terminal', isInteractive: true })
+  await clock.advance(100)
+  await clock.settle()
+
+  const toFound = sent.filter(x => x.url.startsWith('http://desk.local'))
+  expect(toFound.length).toBeGreaterThan(0)
+  expect(toFound.every(x => x.token === undefined)).toBe(true)
 })

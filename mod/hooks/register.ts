@@ -103,7 +103,7 @@ async function retarget($: EngineInterface, url: string) {
     link.sentTo = ''
     const sid = await $.session.id()
     const body = JSON.stringify({ v: 1, sid: sid.slice(0, 12) })
-    void $.http.fetch(`${old}/api/end`, { method: 'POST', headers: headers(), body }).catch(() => undefined)
+    void $.http.fetch(`${old}/api/end`, { method: 'POST', headers: headers(old), body }).catch(() => undefined)
   }
 }
 
@@ -169,8 +169,13 @@ async function autoDiscover($: EngineInterface, isInteractive: boolean) {
 const sourceOf = () =>
   link.chosen ? `${link.chosen.label}, chosen with /orb choose` : link.foundUrl && link.url === link.foundUrl ? 'the one orb found on the network' : 'from /config'
 
-function headers(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...(link.token ? { 'X-Orb-Token': link.token } : {}) }
+/**
+ * The token goes only to an orb the person named: /config's URL or their pick. An orb that is merely
+ * found on the network could be anything that advertises itself as one, so it gets no token.
+ */
+function headers(url: string): Record<string, string> {
+  const isTrusted = url === link.configUrl || url === link.chosen?.url
+  return { 'Content-Type': 'application/json', ...(link.token && isTrusted ? { 'X-Orb-Token': link.token } : {}) }
 }
 
 async function push($: EngineInterface, isHeartbeat = false) {
@@ -187,8 +192,11 @@ async function push($: EngineInterface, isHeartbeat = false) {
   if (!isHeartbeat && sig === link.lastSig) return
   link.isSending = true
   try {
-    const r = await $.http.fetch(`${link.url}/api/state`, { method: 'POST', headers: headers(), body: JSON.stringify(wire) })
-    if (!r.ok) throw new Error(r.status === 401 ? 'token refused (401)' : `HTTP ${r.status}`)
+    const r = await $.http.fetch(`${link.url}/api/state`, { method: 'POST', headers: headers(link.url), body: JSON.stringify(wire) })
+    if (!r.ok) {
+      const isFound = r.status === 401 && link.url === link.foundUrl && !link.chosen
+      throw new Error(isFound ? 'needs a token: run /orb choose to trust this orb (401)' : r.status === 401 ? 'token refused (401)' : `HTTP ${r.status}`)
+    }
     if (link.failures >= 3) $.ui.status(undefined)
     link.failures = 0
     link.retryAt = 0
@@ -278,7 +286,7 @@ export const register: Register = (on, options) => {
   on('session.end', async ($, e, next) => {
     if (link.isEnabled && link.url) {
       const body = JSON.stringify({ v: 1, sid: e.sessionId.slice(0, 12) })
-      await $.http.fetch(`${link.url}/api/end`, { method: 'POST', headers: headers(), body }).catch(() => undefined)
+      await $.http.fetch(`${link.url}/api/end`, { method: 'POST', headers: headers(link.url), body }).catch(() => undefined)
     }
     if (e.reason === 'clear') {
       link.lastSig = ''

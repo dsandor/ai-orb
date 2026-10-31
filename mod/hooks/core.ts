@@ -380,10 +380,26 @@ const stripDot = (h: string) => h.replace(/\.$/, '')
 
 type Found = { type: string; host: string; port: number; ip: string; txt: Record<string, string> }
 
+/** A LAN IPv4 literal (10/8, 172.16/12, 192.168/16, 169.254/16): anything a peer advertises past that is refused. */
+export const isLanIp = (ip: string) => {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip)
+  if (!m) return false
+  const [a, b, c, d] = m.slice(1).map(Number) as [number, number, number, number]
+  if ([a, b, c, d].some(n => n > 255)) return false
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)
+}
+
+/** A plain DNS name: letters, digits, dots and hyphens, so it cannot smuggle a path, port or credentials into a URL. */
+export const isHostName = (h: string) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}))*$/.test(h) && h.length <= 253
+
 const toDevice = (f: Found): OrbDevice | null => {
   if (f.type.includes('_http.') && f.txt.api !== '/api/state') return null
-  if (!f.host && !f.ip) return null
-  return { name: f.txt.name || f.host.replace(/\.local$/i, ''), host: f.host, ip: f.txt.ip || f.ip, port: f.port || 80, fw: f.txt.fw ?? '' }
+  const host = isHostName(f.host) ? f.host : ''
+  const ip = [f.txt.ip ?? '', f.ip].find(isLanIp) ?? ''
+  if (!host && !ip) return null
+  const name = [f.txt.name ?? '', host.replace(/\.local$/i, '')].find(isHostName) ?? ip
+  const port = Number.isInteger(f.port) && f.port > 0 && f.port < 65536 ? f.port : 80
+  return { name, host, ip, port, fw: fit(f.txt.fw ?? '', 16) }
 }
 
 /** The orbs in `DISCOVER_SCRIPT`'s output, one per host and port, sorted by name. */

@@ -66,14 +66,31 @@ def browse():
     return found.values()
 
 
+def is_lan_ip(ip):
+    m = re.fullmatch(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})", ip or "")
+    if not m or any(int(n) > 255 for n in m.groups()):
+        return False
+    a, b = int(m[1]), int(m[2])
+    return a == 10 or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168) or (a == 169 and b == 254)
+
+
+def is_host_name(h):
+    return len(h or "") <= 253 and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,62}(\.[A-Za-z0-9][A-Za-z0-9-]{0,62})*", h or "") is not None
+
+
 def devices():
     out = {}
     for f in sorted(browse(), key=lambda f: f["type"] == "_http"):  # _claude-orb records first
         t = f["txt"]
         if f["type"] == "_http" and t.get("api") != "/api/state":
             continue
-        name = t.get("name") or re.sub(r"\.local$", "", f["host"], flags=re.I)
-        d = {"name": name, "host": f["host"], "ip": t.get("ip") or f["ip"], "port": f["port"], "fw": t.get("fw", "")}
+        host = f["host"] if is_host_name(f["host"]) else ""
+        ip = next((x for x in (t.get("ip", ""), f["ip"]) if is_lan_ip(x)), "")
+        if not host and not ip:
+            continue
+        name = next((x for x in (t.get("name", ""), re.sub(r"\.local$", "", host, flags=re.I)) if is_host_name(x)), ip)
+        port = f["port"] if 0 < f["port"] < 65536 else 80
+        d = {"name": name, "host": host, "ip": ip, "port": port, "fw": re.sub(r"[^\x20-\x7e]", "", t.get("fw", ""))[:16]}
         out.setdefault(f"{(d['ip'] or d['host']).lower()}:{d['port']}", d)
     return sorted(out.values(), key=lambda d: (d["name"], d["ip"]))
 

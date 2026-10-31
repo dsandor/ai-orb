@@ -84,7 +84,8 @@ export const DeskOrb = async ({ client, directory, worktree }: any, options?: Re
       retryAt = 0
       for (const x of sessions.values()) x.lastSig = ''
     }
-    token = c?.token || fixedToken
+    // A token goes only to an orb the person named (choice file); one merely found on the network gets none.
+    token = c?.url ? c.token || fixedToken : ''
   }
 
   const post = async (path: string, body: unknown) => {
